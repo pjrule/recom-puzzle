@@ -1,6 +1,6 @@
 # recom-puzzle
 
-This project aims to accelerate exploration of the [ReCom metagraph](https://mggg.org/metagraph) of grid graph partitionings. It is still unknown whether the class of metagraphs induced by balanced _n_-partionings of the _n_ ⨉ _m_ grid graphs are all connected, though empirical results suggest this holds when _m_ = _n_ and _n_ ≤ 8. I aim to build some intuition for this reconfiguration problem by turning canonicalization (that is, converting a starting plan to a striped configuration) into an interactive puzzle game.
+This project aims to accelerate exploration of the [ReCom metagraph](https://mggg.org/metagraph) of grid graph partitionings. It is still unknown whether the class of metagraphs induced by balanced _n_-partitionings of the _n_ ⨉ _m_ grid graphs are all connected, though empirical results suggest this holds when _m_ = _n_ and _n_ ≤ 8. I aim to build some intuition for this reconfiguration problem by turning canonicalization (that is, converting a starting plan to a striped configuration) into an interactive puzzle game.
 
 ## Development
 
