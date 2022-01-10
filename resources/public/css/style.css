@@ -2,13 +2,16 @@ button.grid-cell {
     width: 50px;
     height: 50px;
     border: 0;
-    margin: 2px;
+    margin: 1px;
     opacity: 0.75;
     font-weight: bold;
     font-size: 1em;
 }
 button.grid-cell:hover {
     opacity: 1;
+}
+button.selected {
+    border: 4px solid red;
 }
 
 body {
@@ -29,63 +32,63 @@ body {
 }
 
 /* from districtr (src/colors.js) */
-.dist-0 {
+.dist-1 {
     background-color: #0099cd;
 }
-.dist-1 {
+.dist-2 {
     background-color: #ffca5d; 
 }
-.dist-2 {
+.dist-3 {
     background-color: #00cd99;
 }
-.dist-3 {
+.dist-4 {
     background-color: #99cd00;
 }
-.dist-4 {
+.dist-5 {
     background-color: #cd0099;
 }
-.dist-5 {
+.dist-6 {
     background-color: #9900cd;
 }
-.dist-6 {
+.dist-7 {
     background-color: #8dd3c7;
 }
-.dist-7 {
+.dist-8 {
     background-color: #bebada;
 }
-.dist-8 {
+.dist-9 {
     background-color: #fb8072;
 }
-.dist-9 {
+.dist-10 {
     background-color: #80b1d3;
 }
-.dist-10 {
+.dist-11 {
     background-color: #fdb462;
 }
-.dist-11 {
+.dist-12 {
     background-color: #b3de69;
 }
-.dist-12 {
+.dist-13 {
     background-color: #fccde5;
 }
-.dist-13 {
+.dist-14 {
     background-color: #bc80bd;
 }
-.dist-14 {
+.dist-15 {
     background-color: #ccebc5;
 }
-.dist-15 {
+.dist-16 {
     background-color: #ffed6f;
 }
-.dist-16 {
+.dist-17 {
     background-color: #ffffb3;
 }
-.dist-17 {
+.dist-18 {
     background-color: #a6cee3;
 }
-.dist-18 {
+.dist-19 {
     background-color: #1f78b4;
 }
-.dist-19 {
+.dist-20 {
     background-color: #b2df8a;
 }
