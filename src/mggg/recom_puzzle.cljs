@@ -100,6 +100,9 @@
 (defn contiguous-dists [grid]
   (filter (partial dist-contiguous? grid) (dists grid)))
 
+(defn dists-contiguous? [grid]
+  (every? (partial dist-contiguous? grid) (dists grid)))
+
 (defn adjacent-dist-pairs [grid]
   (filter
     (fn [dist-pair] (let [[a b] dist-pair] (and a b (> b a))))
@@ -127,10 +130,7 @@
         (= (set dists) visited)))
     true)) ; empty subgraph is vacuously contiguous
 
-(defn dists-connected? [grid]
-  (dist-quotient-graph-connected? grid (dists grid)))
-
-(defn dists-valid? [grid] (and (dists-connected? grid) (dists-balanced? grid)))
+(defn dists-valid? [grid] (and (dists-contiguous? grid) (dists-balanced? grid)))
 
 
 ;;; ========================= Grid rendering =========================
@@ -150,11 +150,12 @@
       row-state)))
 
 (defn render-grid [state]
+  [:div {:id "grid"}
     (map-indexed
       (fn [row-idx row-state]
         [:div {:data-grid-row row-idx :class "grid-row"}
          (render-grid-row state row-idx row-state)])
-      (get state :grid)))
+      (get state :grid))])
 
 
 ;;; ================== Cell/district selection events =================
@@ -188,11 +189,15 @@
   ;; Clears selected district pair.
   (when (in-progress? state)
     (let [{grid :grid in-progress :in-progress score :score} state
-          [a b] (seq in-progress)]
-        (refresh! {:grid (replace-grid {a (min a b), b (min a b)} grid)
+          [a b] (seq in-progress)
+          new-grid (replace-grid {a (min a b), b (min a b)} grid)
+          [row col]  (any-dist-cell grid a)]
+        (refresh! {:grid new-grid
                    :selected #{}
                    :score score
-                   :in-progress in-progress}))))
+                   :in-progress in-progress
+                   :row row 
+                   :col col}))))
 
 (defn merge-selected! [state] 
   ;; If two contiguous districts are selected, makes them editable. 
@@ -209,9 +214,14 @@
                    :row row
                    :col col
                    :score score})))
-    (when (and (in-progress? state) (dists-valid? grid))
-      (swap! history conj grid) ; save last state in global history
-      (refresh! {:grid grid :selected #{} :in-progress #{} :score (inc score)}))))
+    (when (in-progress? state) 
+      (if (dists-valid? grid)
+        (do
+          (swap! history conj grid) ; save last state in global history
+          (refresh! {:grid grid :selected #{} :in-progress #{}
+                     :score (inc score)}))
+        (when-let [grid (gdom/getElement "grid")]
+          (gdom/setProperties grid #js {"class" "shake"}))))))
 
 
 
@@ -225,7 +235,7 @@
     (let [last-grid (or (first @history) stripes) {score :score} state]
       (swap! history rest)
       (refresh! {:grid last-grid :selected #{} :in-progress #{}
-                 :score (if (in-progress? state) score (inc score))}))))
+                 :score (if (in-progress? state) (inc score) score)}))))
 
 
 ;;; ======================= Keyboard navigation =======================
