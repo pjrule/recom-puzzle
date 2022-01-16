@@ -1,8 +1,4 @@
 ;;; UI for in-browser ReCom puzzle.
-;;
-;; some helpers inspired by (or borrowed from) the learn-cljs tutorials
-;; see https://github.com/kendru/learn-cljs/blob/main/code/lesson-20/contacts/
-;;     src/learn_cljs/contacts.cljs
 (ns ^:figwheel-hooks mggg.recom-puzzle
   (:require-macros [hiccups.core :as hiccups])
   (:require [clojure.set :as set]
@@ -12,12 +8,6 @@
             [goog.events :as gevents]
             [goog.string :as str])
   (:import [goog.events EventType KeyHandler]))
-
-
-;;; ====================== App container setup ======================
-(def app-container (gdom/getElement "app"))
-(defn set-app-html! [html-str]
-  (set! (.-innerHTML app-container) html-str))
 
 
 ;;; ================ Global parameters and state ====================
@@ -30,10 +20,11 @@
 (def height 8)
 (def stripes (vec (map (fn [row] (vec (repeat width row)))
                        (range 1 (+ height 1)))))
-(def initial-state {:grid stripes :selected #{} :in-progress #{}})
-(defn in-progress? [state] (seq (get state :in-progress)))
-(defonce history (atom (list initial-state)))
+(def initial-state {:grid stripes :selected #{} :in-progress #{} :score 0})
+(def history (atom ()))
+
 (declare refresh!)
+(defn in-progress? [state] (seq (get state :in-progress)))
 
 
 ;;; ======================== Generic helpers ========================
@@ -84,7 +75,8 @@
 (defn dist-size [grid dist] (count (dist-cells grid dist)))
 (defn any-dist-cell [grid dist] (some identity (dist-cells grid dist)))
 (defn dists-balanced? [grid]
-  (let [sizes (vals (dist-sizes grid))] (= (min sizes) (max sizes))))
+  (let [sizes (vals (dist-sizes grid))]
+    (= (apply min sizes) (apply max sizes))))
 
 (defn dist-component [grid dist first-cell]
   (loop [visited #{}
@@ -134,6 +126,11 @@
           (recur (conj visited curr) (concat next-dists (drop 1 stack)) adj))
         (= (set dists) visited)))
     true)) ; empty subgraph is vacuously contiguous
+
+(defn dists-connected? [grid]
+  (dist-quotient-graph-connected? grid (dists grid)))
+
+(defn dists-valid? [grid] (and (dists-connected? grid) (dists-balanced? grid)))
 
 
 ;;; ========================= Grid rendering =========================
@@ -188,21 +185,20 @@
 ;;; ===================== Global selection events ====================
 ;;; For manipulating district pairs and multiple-district selections.
 (defn reset-selected! [state]
-  ;; Resets selection (if no in-progress districts); otherwise,
-  ;; clears selected district pair.
-  (if (in-progress? state)
-    (let [{grid :grid in-progress :in-progress} state
+  ;; Clears selected district pair.
+  (when (in-progress? state)
+    (let [{grid :grid in-progress :in-progress score :score} state
           [a b] (seq in-progress)]
-        (swap! history conj state) ; save last state in global history
         (refresh! {:grid (replace-grid {a (min a b), b (min a b)} grid)
                    :selected #{}
-                   :in-progress in-progress}))
-    (refresh! (assoc state :selected #{}))))
+                   :score score
+                   :in-progress in-progress}))))
 
 (defn merge-selected! [state] 
   ;; If two contiguous districts are selected, makes them editable. 
   ;; Otherwise, attempts to save in-progress districts. (TODO)
-  (let [{grid :grid selected :selected} state]
+  (let [{grid :grid selected :selected in-progress :in-progress
+         score :score} state]
     (when (and (= (count selected) 2)
              (dist-quotient-graph-connected? grid selected))
       (let [[a b] (seq selected)
@@ -211,18 +207,25 @@
                    :selected #{}
                    :in-progress selected
                    :row row
-                   :col col})))))
+                   :col col
+                   :score score})))
+    (when (and (in-progress? state) (dists-valid? grid))
+      (swap! history conj grid) ; save last state in global history
+      (refresh! {:grid grid :selected #{} :in-progress #{} :score (inc score)}))))
+
 
 
 ;;; ===================== History events (undo) =====================
 ;;; TODO: redo?
 (defn undo! [state]
-  ;; Reverts to the last global grid state (passed state is ignored).
+  ;; Reverts to the last global grid state.
   ;; In-progress/selected districts are cleared.
-  (when (seq @history)
-    (let [{last-grid :grid} (first @history)]
+  (if (seq (get state :selected))
+    (refresh! (assoc state :selected #{}))
+    (let [last-grid (or (first @history) stripes) {score :score} state]
       (swap! history rest)
-      (refresh! {:grid last-grid :selected #{} :in-progress #{}}))))
+      (refresh! {:grid last-grid :selected #{} :in-progress #{}
+                 :score (if (in-progress? state) score (inc score))}))))
 
 
 ;;; ======================= Keyboard navigation =======================
@@ -240,7 +243,7 @@
 (defn move-down! [order state]
   (when (in-progress? state)
     (let [{row :row col :col grid :grid in-progress :in-progress} state
-          col-below (subvec (get-col grid col) (+ 1 row))
+          col-below (subvec (get-col grid col) (inc row))
           pairs-below (order (map-indexed #(list (+ 1 row %1) %2) col-below))
           [a b] (seq in-progress)]
       (when-let [first-row (some (index-when-matches-pair a b) pairs-below)]
@@ -258,11 +261,9 @@
 (defn move-right! [order state]
   (when (in-progress? state)
     (let [{row :row col :col grid :grid in-progress :in-progress} state
-          col-right (subvec (get grid row) (+ 1 col))
-          pairs-right (order (map-indexed #(list (+ 1 col) %2) col-right))
+          col-right (subvec (get grid row) (inc col))
+          pairs-right (order (map-indexed #(list (+ 1 col %1) %2) col-right))
           [a b] (seq in-progress)]
-      (println row col col-right pairs-right a b)
-      (println (some (index-when-matches-pair a b) pairs-right))
       (when-let [first-col (some (index-when-matches-pair a b) pairs-right)]
         (refresh! (assoc state :col first-col))))))
 
@@ -279,7 +280,7 @@
 (def jump-right! (partial move-right! reverse))
 
 
-;;; ==================== Global event handlers  ====================
+;;; ===================== Global event handlers  =====================
 ;;; Key events and grid click events are re-attached to the DOM at
 ;;; each render.
 (defn capture-key
@@ -325,24 +326,34 @@
                       keycodes/EIGHT (on-dist-digit-key! 8)
                       keycodes/NINE (on-dist-digit-key! 9)
 
-                      ;; gamer keybindings (wasd)
-                      keycodes/W move-one-up!
-                      keycodes/A move-one-left!
-                      keycodes/S move-one-down!
-                      keycodes/D move-one-right!
-
-                      ;; normie keybindings (arrow keys)
+                      ;; one-cell-at-a-time navigation
                       keycodes/UP move-one-up!
                       keycodes/LEFT move-one-left!
                       keycodes/DOWN move-one-down!
-                      keycodes/RIGHT move-one-right!}))
+                      keycodes/RIGHT move-one-right!
+                      
+                      ;; jump navigation
+                      keycodes/W jump-up!
+                      keycodes/A jump-left!
+                      keycodes/S jump-down!
+                      keycodes/D jump-right!}))
 
 
-;;; ==================== Global rendering ====================
+;;; ======================= App container setup =======================
+;;; some app-level helpers inspired by (or borrowed from) learn-cljs
+;;; see https://github.com/kendru/learn-cljs/blob/main/code/lesson-20/contacts/
+;;;     src/learn_cljs/contacts.cljs
+(def app-container (gdom/getElement "app"))
+(defn set-app-html! [html-str]
+  (set! (.-innerHTML app-container) html-str))
+
+
+;;; ======================== Global rendering ========================
 (defn render-app! [state]
   (set-app-html!
    (hiccups/html
     [:div {:class "app-main"}
+     [:div {:class "score"} (get state :score)]
      (render-grid state)])))
 
 (defn refresh! [state]
