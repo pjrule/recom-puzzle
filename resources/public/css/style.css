@@ -7,12 +7,24 @@ button.grid-cell {
     font-weight: bold;
     font-size: 1em;
 }
+
 button.grid-cell:hover {
     opacity: 1;
 }
+
 button.selected {
     border: 4px solid red;
 }
+
+button.in-progress {
+    border: 4px dotted blue;
+}
+
+button.cursor {
+    border: 4px solid blue;
+    box-shadow: 0 0 10px #9ecaed;
+}
+
 
 body {
     background-color: #fff9f2;

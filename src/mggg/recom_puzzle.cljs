@@ -1,4 +1,4 @@
-;; UI for in-browser ReCom puzzle.
+;;; UI for in-browser ReCom puzzle.
 ;;
 ;; some helpers inspired by (or borrowed from) the learn-cljs tutorials
 ;; see https://github.com/kendru/learn-cljs/blob/main/code/lesson-20/contacts/
@@ -14,15 +14,46 @@
   (:import [goog.events EventType KeyHandler]))
 
 
-;; Container setup.
+;;; ====================== App container setup ======================
 (def app-container (gdom/getElement "app"))
 (defn set-app-html! [html-str]
   (set! (.-innerHTML app-container) html-str))
+
+
+;;; ================ Global parameters and state ====================
+;;; We don't keep a global state variable (rather, `render!` is called
+;;; with a new `state` for each UI change), but we do keep global
+;;; state history.
+;;; TODO: add menu options, load initial plans from server.
+
+(def width 8)
+(def height 8)
+(def stripes (vec (map (fn [row] (vec (repeat width row)))
+                       (range 1 (+ height 1)))))
+(def initial-state {:grid stripes :selected #{} :in-progress #{}})
+(defn in-progress? [state] (seq (get state :in-progress)))
+(defonce history (atom (list initial-state)))
 (declare refresh!)
 
-;; Helpers.
+
+;;; ======================== Generic helpers ========================
+;;; Primarily for grid (2D `vec`) and pair manipulation.
+
 (defn toggle [s val] ((if (s val) disj conj) s val))
-(defn get-cell [grid cell] (get (get grid (first cell)) (second cell)))
+
+(defn unordered-pair-in? [coll [a b]]
+  (some #(or (= (list a b) %) (= (list b a) %)) coll))
+(defn pair-has-element? [el [a b]] (or (= a el) (= b el)))
+(defn pair-other-element [el [a b]] (if (= a el) b a))
+(defn index-when-matches-pair [a b]
+  (fn [[idx dist]] (when (or (= dist a) (= dist b)) idx)))
+
+(defn get-cell [grid [row col]] (-> grid (get row) (get col)))
+(defn set-cell [grid [row col] v] (assoc grid row (assoc (get grid row) col v)))
+(defn cell-neighbors [row col]
+  (partition 2 (list (- row 1) col (+ row 1) col row (- col 1) row (+ col 1))))
+
+(defn get-col [grid col] (vec (map #(get % col) grid)))
 (def do-map-indexed (comp doall map-indexed))
 (defn do-grid [cell-fn grid]
   (do-map-indexed
@@ -40,24 +71,20 @@
     grid))
 (defn replace-grid [smap grid] (vec (map (partial replace smap) grid)))
 (defn map-grid-flat [cell-fn grid] (reduce concat (map-grid cell-fn grid)))
-(defn cell-neighbors [row col]
-  (partition 2 (list (- row 1) col (+ row 1) col row (- col 1) row (+ col 1))))
-(defn unordered-pair-in? [coll [a b]]
-  (some #(or (= (list a b) %) (= (list b a) %)) coll))
-(defn pair-has-element? [el [a b]] (or (= a el) (= b el)))
-(defn pair-other-element [el [a b]] (if (= a el) b a))
 
+;;; ======================== Grid graph logic ========================
+;;; We require districts to be connected (one rook-connected piece)
+;;; and population-balanced. 
 
-;; Grid logic.
 (defn dists [grid] (distinct (flatten grid)))
 (defn dist-sizes [grid] (frequencies (flatten grid)))
-(defn dists-balanced? [grid]
-  (let [sizes (vals (dist-sizes grid))] (= (min sizes) (max sizes))))
 (defn dist-cells [grid dist]
   (filter identity
     (map-grid-flat (fn [row col v] (when (= v dist) (list row col))) grid)))
 (defn dist-size [grid dist] (count (dist-cells grid dist)))
 (defn any-dist-cell [grid dist] (some identity (dist-cells grid dist)))
+(defn dists-balanced? [grid]
+  (let [sizes (vals (dist-sizes grid))] (= (min sizes) (max sizes))))
 
 (defn dist-component [grid dist first-cell]
   (loop [visited #{}
@@ -109,58 +136,157 @@
     true)) ; empty subgraph is vacuously contiguous
 
 
+;;; ========================= Grid rendering =========================
+(defn render-grid-row [state row-idx row-state]
+  (let [{grid :grid selected :selected in-progress :in-progress
+         selected-row :row selected-col :col} state]
+    (map-indexed
+      (fn [col-idx dist]
+        (let [selected-class (when (contains? selected dist) " selected")
+              progress-class (when (contains? in-progress dist) " in-progress")
+              cursor-class   (when (and (= row-idx selected-row)
+                                        (= col-idx selected-col)) " cursor")]
+          [:button {:id (str "grid-cell-" row-idx "-" col-idx)
+                    :class (str "grid-cell dist-" dist
+                                selected-class progress-class cursor-class)}
+           dist]))
+      row-state)))
 
-;; Grid parameters (TODO: add menu options, load initial plans from server)
-(def width 8)
-(def height 8)
-(def stripes (vec (map (fn [row] (vec (repeat width row)))
-                       (range 1 (+ height 1)))))
-(def initial-state {:grid stripes :selected #{} :in-progress #{}})
+(defn render-grid [state]
+    (map-indexed
+      (fn [row-idx row-state]
+        [:div {:data-grid-row row-idx :class "grid-row"}
+         (render-grid-row state row-idx row-state)])
+      (get state :grid)))
 
-(def cases
-  (map (fn [n] {:name (str/format "%dx%d → %d, no tolerance" n n n)
-                :path (str/format "%d_%d_%d_0.json" n n n)})
-       (range 4 11)))
 
-;; Grid rendering and event handling.
-(defn render-grid-row [row-idx row-state selected]
-  (map-indexed
-    (fn [col-idx assignment]
-      (let [selected-class (when (contains? selected assignment) " selected")]
-        [:button {:id (str "grid-cell-" row-idx "-" col-idx)
-                  :class (str "grid-cell dist-" assignment selected-class)}
-         assignment]))
-    row-state))
+;;; ================== Cell/district selection events =================
+;;; For manipulating individual cells and districts.
+(defn on-dist-select! [state dist]
+  ;; Toggles district selection when no districts are in progress.
+  (when (not (in-progress? state))
+      (refresh! (update state :selected toggle dist))))
+(defn on-dist-digit-key! [digit] #(on-dist-select! % digit))
 
-(defn render-grid [grid-state selected]
-  (map-indexed
-    (fn [row-idx row-state]
-      [:div {:data-grid-row row-idx :class "grid-row"}
-       (render-grid-row row-idx row-state selected)])
-    grid-state))
+(defn on-cell-select! [state row col]
+  ;; Toggles a cell's district assignment when the cell
+  ;; is in an in-progress district.
+  (when (in-progress? state)
+    (let [{grid :grid in-progress :in-progress} state
+          cell-dist (get-cell grid (list row col))]
+      (when (contains? in-progress cell-dist)
+        (let [toggle-dist (pair-other-element cell-dist (seq in-progress))
+              new-grid (set-cell grid (list row col) toggle-dist)]
+          (refresh! (assoc state :grid new-grid :row row :col col)))))))
 
-(defn on-dist-click [state dist]
-  (if (empty? (get state :in-progress))
-    (let [next-state (update state :selected toggle dist)]
-      (refresh! next-state))))
+(defn toggle-selected-cell! [state]
+  ;; Toggles the district of the selected cell of the in-progress district pair.
+  (when (in-progress? state)
+    (let [{row :row col :col} state] (on-cell-select! state row col))))
 
-(defn reset-selected [state] (refresh! (assoc state :selected #{})))
 
-(defn merge-selected [state]
+;;; ===================== Global selection events ====================
+;;; For manipulating district pairs and multiple-district selections.
+(defn reset-selected! [state]
+  ;; Resets selection (if no in-progress districts); otherwise,
+  ;; clears selected district pair.
+  (if (in-progress? state)
+    (let [{grid :grid in-progress :in-progress} state
+          [a b] (seq in-progress)]
+        (swap! history conj state) ; save last state in global history
+        (refresh! {:grid (replace-grid {a (min a b), b (min a b)} grid)
+                   :selected #{}
+                   :in-progress in-progress}))
+    (refresh! (assoc state :selected #{}))))
+
+(defn merge-selected! [state] 
+  ;; If two contiguous districts are selected, makes them editable. 
+  ;; Otherwise, attempts to save in-progress districts. (TODO)
   (let [{grid :grid selected :selected} state]
     (when (and (= (count selected) 2)
              (dist-quotient-graph-connected? grid selected))
-      (let [[a b] (into () selected)]
-        (refresh! {:grid (replace-grid {a 0, b 0} grid)
+      (let [[a b] (seq selected)
+            [row col] (any-dist-cell grid (min a b))]
+        (refresh! {:grid grid
                    :selected #{}
-                   :in-progress selected})))))
+                   :in-progress selected
+                   :row row
+                   :col col})))))
 
 
-;; keypress handling based on snippet from
-;; https://tech.toryanderson.com/2020/10/22/
-;; capturing-key-presses-in-clojurescript-with-closure/
+;;; ===================== History events (undo) =====================
+;;; TODO: redo?
+(defn undo! [state]
+  ;; Reverts to the last global grid state (passed state is ignored).
+  ;; In-progress/selected districts are cleared.
+  (when (seq @history)
+    (let [{last-grid :grid} (first @history)]
+      (swap! history rest)
+      (refresh! {:grid last-grid :selected #{} :in-progress #{}}))))
+
+
+;;; ======================= Keyboard navigation =======================
+;;; Helpers to move the selected cell up/down/left/right when a district
+;;; pair is in progress. In-between cells are jumped over.
+(defn move-up! [order state]
+  (when (in-progress? state)
+    (let [{row :row col :col grid :grid in-progress :in-progress} state
+          col-above (subvec (get-col grid col) 0 row)
+          pairs-above (order (map-indexed #(list %1 %2) col-above))
+          [a b] (seq in-progress)]
+      (when-let [first-row (some (index-when-matches-pair a b) pairs-above)]
+        (refresh! (assoc state :row first-row))))))
+
+(defn move-down! [order state]
+  (when (in-progress? state)
+    (let [{row :row col :col grid :grid in-progress :in-progress} state
+          col-below (subvec (get-col grid col) (+ 1 row))
+          pairs-below (order (map-indexed #(list (+ 1 row %1) %2) col-below))
+          [a b] (seq in-progress)]
+      (when-let [first-row (some (index-when-matches-pair a b) pairs-below)]
+        (refresh! (assoc state :row first-row))))))
+
+(defn move-left! [order state]
+  (when (in-progress? state)
+    (let [{row :row col :col grid :grid in-progress :in-progress} state
+          col-left (subvec (get grid row) 0 col)
+          pairs-left (order (map-indexed #(list %1 %2) col-left))
+          [a b] (seq in-progress)]
+      (when-let [first-col (some (index-when-matches-pair a b) pairs-left)]
+        (refresh! (assoc state :col first-col))))))
+
+(defn move-right! [order state]
+  (when (in-progress? state)
+    (let [{row :row col :col grid :grid in-progress :in-progress} state
+          col-right (subvec (get grid row) (+ 1 col))
+          pairs-right (order (map-indexed #(list (+ 1 col) %2) col-right))
+          [a b] (seq in-progress)]
+      (println row col col-right pairs-right a b)
+      (println (some (index-when-matches-pair a b) pairs-right))
+      (when-let [first-col (some (index-when-matches-pair a b) pairs-right)]
+        (refresh! (assoc state :col first-col))))))
+
+;;; Basic navigation (one cell at a time).
+(def move-one-up!    (partial move-up!    reverse))
+(def move-one-down!  (partial move-down!  identity))
+(def move-one-left!  (partial move-left!  reverse))
+(def move-one-right! (partial move-right! identity))
+
+;;; Jump navigation (as far as possible in a direction).
+(def jump-up!    (partial move-up!    identity))
+(def jump-down!  (partial move-down!  reverse))
+(def jump-left!  (partial move-left!  identity))
+(def jump-right! (partial move-right! reverse))
+
+
+;;; ==================== Global event handlers  ====================
+;;; Key events and grid click events are re-attached to the DOM at
+;;; each render.
 (defn capture-key
   [state keycodes]
+  ;; keypress handling based on snippet from
+  ;; https://tech.toryanderson.com/2020/10/22/
+  ;; capturing-key-presses-in-clojurescript-with-closure/
   (let [press-fn (fn [key-press]
                    (when-let [f (get keycodes (.. key-press -keyCode))]
                      (f state)))]
@@ -170,24 +296,54 @@
 
 (defn attach-grid-events! [state]
   (do-grid
-    (fn [row-idx col-idx assignment]
+    (fn [row-idx col-idx dist]
       (when-let
         [grid-button (gdom/getElement (str "grid-cell-" row-idx "-" col-idx))]
           (gevents/listen grid-button "click"
-                          (fn [_] (on-dist-click state assignment)))))
+                          #(on-dist-select! state dist))
+          (gevents/listen grid-button "click"
+                          #(on-cell-select! state row-idx col-idx))))
     (get state :grid)))
 
-;; App rendering.
 (defn attach-event-handlers! [state]
   (attach-grid-events! state)
-  (capture-key state {keycodes/R reset-selected
-                      keycodes/M merge-selected}))
+  (capture-key state {keycodes/R reset-selected!
+                      keycodes/ENTER merge-selected!
+                      keycodes/U undo!
+                      keycodes/ESC undo!  ; TODO: keep this?
+                      keycodes/SPACE toggle-selected-cell!
 
+                      ;; district selection keybindings (up to 9x9)
+                      ;; TODO: use modified hexadecimal for larger grids?
+                      keycodes/ONE (on-dist-digit-key! 1)
+                      keycodes/TWO (on-dist-digit-key! 2)
+                      keycodes/THREE (on-dist-digit-key! 3)
+                      keycodes/FOUR (on-dist-digit-key! 4)
+                      keycodes/FIVE (on-dist-digit-key! 5)
+                      keycodes/SIX (on-dist-digit-key! 6)
+                      keycodes/SEVEN (on-dist-digit-key! 7)
+                      keycodes/EIGHT (on-dist-digit-key! 8)
+                      keycodes/NINE (on-dist-digit-key! 9)
+
+                      ;; gamer keybindings (wasd)
+                      keycodes/W move-one-up!
+                      keycodes/A move-one-left!
+                      keycodes/S move-one-down!
+                      keycodes/D move-one-right!
+
+                      ;; normie keybindings (arrow keys)
+                      keycodes/UP move-one-up!
+                      keycodes/LEFT move-one-left!
+                      keycodes/DOWN move-one-down!
+                      keycodes/RIGHT move-one-right!}))
+
+
+;;; ==================== Global rendering ====================
 (defn render-app! [state]
   (set-app-html!
    (hiccups/html
     [:div {:class "app-main"}
-     (render-grid (get state :grid) (get state :selected))])))
+     (render-grid state)])))
 
 (defn refresh! [state]
   (gevents/removeAll js/document) ; reset global event listeners
