@@ -281,14 +281,14 @@
         (let [new-grid
               (assoc grid min-row (vec (repeat union-width (min a b)))
                           max-row (vec (repeat union-width (max a b))))]
-          (refresh! (assoc state :grid new-grid :score (inc score)))))
+          (refresh! (assoc state :grid new-grid))))
       (when (= union-width 2)  ; vertical merge
         (let [grid-t (transpose grid)
               new-grid
               (assoc grid-t min-col (vec (repeat union-height (min a b)))
                             max-col (vec (repeat union-height (max a b))))
               grid-tt (transpose new-grid)]
-          (refresh! (assoc state :grid grid-tt :score (inc score))))))))
+          (refresh! (assoc state :grid grid-tt)))))))
         
 
 ;;; ===================== History events (undo) =====================
