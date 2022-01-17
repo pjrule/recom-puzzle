@@ -36,9 +36,6 @@
 
 ;;; ======================== Generic helpers ========================
 ;;; Primarily for grid (2D `vec`) and pair manipulation.
-
-(defn toggle [s val] ((if (s val) disj conj) s val))
-
 (defn unordered-pair-in? [coll [a b]]
   (some #(or (= (list a b) %) (= (list b a) %)) coll))
 (defn pair-has-element? [el [a b]] (or (= a el) (= b el)))
@@ -158,7 +155,7 @@
       (when render?
         (let [grid (parse-next-plan! enum)]
           (reset! history (list grid))
-          (refresh! {:grid grid :selected #{} :in-progress #{} :score 0}))))))
+          (refresh! {:grid grid :selected () :in-progress #{} :score 0}))))))
 
 
 ;;; ========================= Grid rendering =========================
@@ -167,7 +164,7 @@
          selected-row :row selected-col :col} state]
     (map-indexed
       (fn [col-idx dist]
-        (let [selected-class (when (contains? selected dist) " selected")
+        (let [selected-class (when (some #{dist} selected) " selected")
               progress-class (when (contains? in-progress dist) " in-progress")
               cursor-class   (when (and (= row-idx selected-row)
                                         (= col-idx selected-col)) " cursor")]
@@ -190,8 +187,14 @@
 ;;; For manipulating individual cells and districts.
 (defn on-dist-select! [state dist]
   ;; Toggles district selection when no districts are in progress.
-  (when (not (in-progress? state))
-      (refresh! (update state :selected toggle dist))))
+  ;; No more than two districts can be selected at a time.
+  (let [selected (or (get state :selected) ())
+        in-selected? (some #{dist} selected)]
+    (when (and (not (in-progress? state)) (not in-selected?))
+      (if (< (count selected) 2)
+        (refresh! (update state :selected conj dist))
+        (refresh! (assoc  state :selected (list dist (first selected))))))))
+
 (defn on-dist-digit-key! [digit] #(on-dist-select! % digit))
 
 (defn on-cell-select! [state row col]
@@ -214,10 +217,9 @@
 ;;; ===================== Global selection events ====================
 ;;; For manipulating district pairs and multiple-district selections.
 (defn shuffle! []
-  (println "shuffle!")
   (let [grid (parse-next-plan! enum)]
     (reset! history (list grid))
-    (refresh! {:grid grid :selected #{} :in-progress #{} :score 0})))
+    (refresh! {:grid grid :selected () :in-progress #{} :score 0})))
 
 (defn reset-selected! [state]
   ;; Clears selected district pair.
@@ -227,7 +229,7 @@
           new-grid (replace-grid {a (min a b), b (min a b)} grid)
           [row col]  (any-dist-cell grid a)]
         (refresh! {:grid new-grid
-                   :selected #{}
+                   :selected ()
                    :score score
                    :in-progress in-progress
                    :row row 
@@ -243,15 +245,15 @@
       (let [[a b] (seq selected)
             [row col] (any-dist-cell grid (min a b))]
         (refresh! {:grid grid
-                   :selected #{}
-                   :in-progress selected
+                   :selected ()
+                   :in-progress (set selected)
                    :row row
                    :col col
                    :score score})))
     (when (in-progress? state) 
       (if (dists-valid? grid)
         (do (swap! history conj grid) ; save last state in global history
-            (refresh! {:grid grid :selected #{} :in-progress #{}
+            (refresh! {:grid grid :selected () :in-progress #{}
                        :score (inc score)}))
         (when-let [grid (gdom/getElement "grid")]
           ;; hack: ephemerally attach the `shake` class (removed
@@ -265,10 +267,10 @@
   ;; Reverts to the last global grid state.
   ;; In-progress/selected districts are cleared.
   (if (seq (get state :selected))
-    (refresh! (assoc state :selected #{}))
+    (refresh! (assoc state :selected ()))
     (let [last-grid (first @history) {score :score} state]
       (when (second @history) (swap! history rest))
-      (refresh! {:grid last-grid :selected #{} :in-progress #{}
+      (refresh! {:grid last-grid :selected () :in-progress #{}
                  :score (if (in-progress? state) (inc score) score)}))))
 
 
@@ -415,6 +417,7 @@
   (gevents/removeAll js/document) ; reset global event listeners
   (render-app! state)
   (attach-event-handlers! state)
+  (println "new state:" state)
   (print "Refreshed!"))
 
 (defn init! [] (fetch-random-enum! enum true))
