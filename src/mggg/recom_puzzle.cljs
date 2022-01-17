@@ -21,7 +21,7 @@
 ;;; state history.
 ;;; TODO: add menu options, load initial plans from server.
 
-(def grid-size 8)
+(def grid-size 6)
 (def width grid-size)
 (def height grid-size)
 (def num-pages 1)  ; of random plans
@@ -439,7 +439,7 @@
     [:div {:class "app-main"}
      [:div {:class "app-header"}
       [:select {:id "grid-size"}
-       [:option {:value "7x7"} "7x7"]]
+       [:option {:value "8x8"} "8x8"]]
       [:span {:class "score"} (get state :score)]
       [:button {:id "shuffle-button"} "🔀"]]
      (render-grid state)])))

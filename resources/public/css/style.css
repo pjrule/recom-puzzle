@@ -1,11 +1,12 @@
 button.grid-cell {
-    width: 60px;
-    height: 60px;
+    width: 55px;
+    height: 55px;
     border: 0;
     margin: 1px;
     opacity: 0.75;
     font-weight: bold;
     font-size: 1.3em;
+    color: #333;
 }
 
 button.grid-cell:hover {
@@ -32,6 +33,7 @@ body {
     width: 100%;
     margin: 0;
     font-family: "Helvetica Neue", "Helvetica", "Arial", "sans-serif";
+    touch-action: none;
 }
 
 .app-main {
