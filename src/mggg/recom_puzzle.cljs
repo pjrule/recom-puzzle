@@ -190,10 +190,12 @@
   ;; No more than two districts can be selected at a time.
   (let [selected (or (get state :selected) ())
         in-selected? (some #{dist} selected)]
-    (when (and (not (in-progress? state)) (not in-selected?))
-      (if (< (count selected) 2)
-        (refresh! (update state :selected conj dist))
-        (refresh! (assoc  state :selected (list dist (first selected))))))))
+    (when (not (in-progress? state))
+      (if in-selected?
+        (refresh! (assoc state :selected (filter #(not (= dist %)) selected)))
+        (if (< (count selected) 2) ; non-toggle case
+          (refresh! (update state :selected conj dist))
+          (refresh! (assoc  state :selected (list dist (first selected)))))))))
 
 (defn on-dist-digit-key! [digit] #(on-dist-select! % digit))
 
