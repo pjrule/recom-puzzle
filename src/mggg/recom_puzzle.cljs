@@ -11,6 +11,7 @@
             [goog.events :as gevents]
             [goog.object :as gobj]
             [goog.string :as gstr]
+            goog.string.format
             [cljs.core.async :refer [<!]])
   (:import [goog.events EventType KeyHandler]))
 
