@@ -12,8 +12,7 @@ clj -A:fig:min
 if git checkout gh-pages; then 
     git checkout - resources/public
     cp target/public/cljs-out/dev-main.js main.js
-    git reset
-    git add css enum index.html main.js
+    git add main.js
     git commit -m "Push to GitHub Pages"
     git push origin gh-pages
     echo "Deployed!"
