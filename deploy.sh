@@ -11,10 +11,11 @@ fi
 clj -A:fig:min
 if git checkout gh-pages; then 
     git checkout - resources/public/css resources/public/enum resources/public/index_deploy.html
-    rsync -a resources/public/css css
-    rsync -a resources/public/enum enum
+    rsync -a resources/public/css .
+    rsync -a resources/public/enum .
     mv resources/public/index_deploy.html index.html
     cp target/public/cljs-out/dev-main.js main.js
+    rm -r resources
     git add css enum index.html main.js
     git commit -m "Push to GitHub Pages"
     git push origin gh-pages
