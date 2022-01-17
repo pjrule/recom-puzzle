@@ -22,7 +22,7 @@
 ;;; state history.
 ;;; TODO: add menu options, load initial plans from server.
 
-(def grid-size 6)
+(def grid-size 8)
 (def width grid-size)
 (def height grid-size)
 (def num-pages 1)  ; of random plans
