@@ -15,7 +15,7 @@ if git checkout gh-pages; then
     rsync -a resources/public/enum .
     mv resources/public/index_deploy.html index.html
     cp target/public/cljs-out/dev-main.js main.js
-    rm -r resources
+    git reset
     git add css enum index.html main.js
     git commit -m "Push to GitHub Pages"
     git push origin gh-pages
