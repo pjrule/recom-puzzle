@@ -10,10 +10,7 @@ fi
 
 clj -A:fig:min
 if git checkout gh-pages; then 
-    git checkout - resources/public/css resources/public/enum resources/public/index_deploy.html
-    rsync -a resources/public/css .
-    rsync -a resources/public/enum .
-    mv resources/public/index_deploy.html index.html
+    git checkout - resources/public
     cp target/public/cljs-out/dev-main.js main.js
     git reset
     git add css enum index.html main.js
