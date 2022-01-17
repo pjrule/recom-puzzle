@@ -5,7 +5,7 @@ button.grid-cell {
     margin: 1px;
     opacity: 0.75;
     font-weight: bold;
-    font-size: 1.1em;
+    font-size: 1.3em;
 }
 
 button.grid-cell:hover {
@@ -45,12 +45,30 @@ body {
 
 .score {
     width: 100%;
-    text-align: center;
-    margin-bottom: 20px;
     font-weight: bold;
     font-size: 2.25rem;
     color: #333;
+    text-align: center;
 }
+
+.app-header {
+    display: flex;
+    padding: 15px 2px;
+}
+
+#shuffle-button {
+    background-color: #ccc;
+    border: none;
+    padding: 10px 13px;
+    font-size: 1.75rem;
+    border-radius: 5px;
+}
+
+#shuffle-button:hover {
+    background-color: #aaa;
+}
+
+
 
 /* from districtr (src/colors.js) */
 .dist-1 {
@@ -66,10 +84,10 @@ body {
     background-color: #99cd00;
 }
 .dist-5 {
-    background-color: #cd0099;
+    background-color: /*#cd0099;*/  #fb8072;
 }
 .dist-6 {
-    background-color: #9900cd;
+    background-color: /*#9900cd;*/ #80b1d3;
 }
 .dist-7 {
     background-color: #8dd3c7;

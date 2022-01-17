@@ -1,12 +1,17 @@
 ;;; UI for in-browser ReCom puzzle.
 (ns ^:figwheel-hooks mggg.recom-puzzle
-  (:require-macros [hiccups.core :as hiccups])
+  (:require-macros [hiccups.core :as hiccups]
+                   [cljs.core.async.macros :refer [go]])
   (:require [clojure.set :as set]
+            [clojure.string :as str]
+            [cljs-http.client :as http]
             [hiccups.runtime]
             [goog.dom :as gdom]
             [goog.events.KeyCodes :as keycodes]
             [goog.events :as gevents]
-            [goog.string :as str])
+            [goog.object :as gobj]
+            [goog.string :as gstr]
+            [cljs.core.async :refer [<!]])
   (:import [goog.events EventType KeyHandler]))
 
 
@@ -16,12 +21,14 @@
 ;;; state history.
 ;;; TODO: add menu options, load initial plans from server.
 
-(def width 8)
-(def height 8)
+(def grid-size 8)
+(def width grid-size)
+(def height grid-size)
+(def num-pages 1)  ; of random plans
 (def stripes (vec (map (fn [row] (vec (repeat width row)))
                        (range 1 (+ height 1)))))
-(def initial-state {:grid stripes :selected #{} :in-progress #{} :score 0})
 (def history (atom ()))
+(def enum (atom ()))
 
 (declare refresh!)
 (defn in-progress? [state] (seq (get state :in-progress)))
@@ -133,6 +140,27 @@
 (defn dists-valid? [grid] (and (dists-contiguous? grid) (dists-balanced? grid)))
 
 
+;;; ====================== Enumeration fetching ======================
+(defn parse-next-plan! [enum]
+  ;; Fetches the next starting plan from the enumeration.
+  (when-let [next-plan (first @enum)]
+    (swap! enum pop)
+    (vec (map vec (partition width (map int next-plan))))))
+
+(defn fetch-random-enum! [enum render?]
+  ;; Populates the enumeration atom with a random subset of plans.
+  (go (let [page-idx   (gstr/format "%02d" (rand-int num-pages))
+            dims       (gstr/format "%dx%d" width height)
+            page-url   (gstr/format "enum/%s/%s_%s.dat" dims dims page-idx)
+            page-data  (<! (http/get page-url))
+            page-lines (into () (str/split (get page-data :body) #"\n"))]
+      (reset! enum page-lines)
+      (when render?
+        (let [grid (parse-next-plan! enum)]
+          (reset! history (list grid))
+          (refresh! {:grid grid :selected #{} :in-progress #{} :score 0}))))))
+
+
 ;;; ========================= Grid rendering =========================
 (defn render-grid-row [state row-idx row-state]
   (let [{grid :grid selected :selected in-progress :in-progress
@@ -185,6 +213,12 @@
 
 ;;; ===================== Global selection events ====================
 ;;; For manipulating district pairs and multiple-district selections.
+(defn shuffle! []
+  (println "shuffle!")
+  (let [grid (parse-next-plan! enum)]
+    (reset! history (list grid))
+    (refresh! {:grid grid :selected #{} :in-progress #{} :score 0})))
+
 (defn reset-selected! [state]
   ;; Clears selected district pair.
   (when (in-progress? state)
@@ -201,7 +235,7 @@
 
 (defn merge-selected! [state] 
   ;; If two contiguous districts are selected, makes them editable. 
-  ;; Otherwise, attempts to save in-progress districts. (TODO)
+  ;; Otherwise, attempts to save in-progress districts.
   (let [{grid :grid selected :selected in-progress :in-progress
          score :score} state]
     (when (and (= (count selected) 2)
@@ -216,13 +250,13 @@
                    :score score})))
     (when (in-progress? state) 
       (if (dists-valid? grid)
-        (do
-          (swap! history conj grid) ; save last state in global history
-          (refresh! {:grid grid :selected #{} :in-progress #{}
-                     :score (inc score)}))
+        (do (swap! history conj grid) ; save last state in global history
+            (refresh! {:grid grid :selected #{} :in-progress #{}
+                       :score (inc score)}))
         (when-let [grid (gdom/getElement "grid")]
+          ;; hack: ephemerally attach the `shake` class (removed
+          ;; at next render)
           (gdom/setProperties grid #js {"class" "shake"}))))))
-
 
 
 ;;; ===================== History events (undo) =====================
@@ -232,8 +266,8 @@
   ;; In-progress/selected districts are cleared.
   (if (seq (get state :selected))
     (refresh! (assoc state :selected #{}))
-    (let [last-grid (or (first @history) stripes) {score :score} state]
-      (swap! history rest)
+    (let [last-grid (first @history) {score :score} state]
+      (when (second @history) (swap! history rest))
       (refresh! {:grid last-grid :selected #{} :in-progress #{}
                  :score (if (in-progress? state) (inc score) score)}))))
 
@@ -316,8 +350,14 @@
                           #(on-cell-select! state row-idx col-idx))))
     (get state :grid)))
 
+
+(defn attach-shuffle-event! [state]
+  (when-let [shuffle-button (gdom/getElement "shuffle-button")]
+    (gevents/listen shuffle-button "click" shuffle!)))
+
 (defn attach-event-handlers! [state]
   (attach-grid-events! state)
+  (attach-shuffle-event! state)
   (capture-key state {keycodes/R reset-selected!
                       keycodes/ENTER merge-selected!
                       keycodes/U undo!
@@ -363,7 +403,11 @@
   (set-app-html!
    (hiccups/html
     [:div {:class "app-main"}
-     [:div {:class "score"} (get state :score)]
+     [:div {:class "app-header"}
+      [:select {:id "grid-size"}
+       [:option {:value "7x7"} "7x7"]]
+      [:span {:class "score"} (get state :score)]
+      [:button {:id "shuffle-button"} "🔀"]]
      (render-grid state)])))
 
 (defn refresh! [state]
@@ -372,4 +416,4 @@
   (attach-event-handlers! state)
   (print "Refreshed!"))
 
-(refresh! initial-state)
+(fetch-random-enum! enum true)
