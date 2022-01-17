@@ -2,7 +2,7 @@
 set -e
 
 ### Deployment to GitHub Pages. ###
-if [ -z git diff --exit-code ]; then
+if [ -z "git diff --exit-code" ]; then
     # git status check: https://unix.stackexchange.com/a/155077
     echo "Working directory not clean. :("
     exit 1
