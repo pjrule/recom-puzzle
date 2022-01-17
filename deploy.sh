@@ -1,10 +1,15 @@
 #!/bin/bash
 set -e
 
-# Deployment to GitHub Pages.
+### Deployment to GitHub Pages. ###
+if [ -z git diff --exit-code ]
+    # git status check: https://unix.stackexchange.com/a/155077
+    echo "Working directory not clean. :("
+    exit 1
+fi
+
 clj -A:fig:min
 if git checkout gh-pages; then 
-    # git status check: https://unix.stackexchange.com/a/155077
     cp -r resources/public/css resources/public/enum .
     cp resources/public/index_deploy.html index.html
     cp target/public/cljs-out/dev-main.js main.js
@@ -14,5 +19,5 @@ if git checkout gh-pages; then
     echo "Deployed!"
     git checkout -
 else
-    echo "Working directory not clean. :("
+    echo "Cannot check out gh-pages branch."
 fi
