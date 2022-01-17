@@ -1,7 +1,9 @@
 {:deps {org.clojure/clojure {:mvn/version "1.10.0"}
         org.clojure/clojurescript {:mvn/version "1.10.773"}
         cljs-http/cljs-http {:mvn/version "0.1.46"}
-        hiccups/hiccups {:mvn/version "0.3.0"}}
+        hiccups/hiccups {:mvn/version "0.3.0"}
+        
+        }
  :paths ["src" "resources"]
  :aliases {:fig {:extra-deps
                   {com.bhauman/rebel-readline-cljs {:mvn/version "0.1.4"}
