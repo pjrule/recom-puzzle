@@ -363,6 +363,7 @@
                       keycodes/U undo!
                       keycodes/ESC undo!  ; TODO: keep this?
                       keycodes/SPACE toggle-selected-cell!
+                      keycodes/ZERO  toggle-selected-cell!
 
                       ;; district selection keybindings (up to 9x9)
                       ;; TODO: use modified hexadecimal for larger grids?
@@ -383,10 +384,10 @@
                       keycodes/RIGHT move-one-right!
                       
                       ;; jump navigation
-                      keycodes/W jump-up!
-                      keycodes/A jump-left!
-                      keycodes/S jump-down!
-                      keycodes/D jump-right!}))
+                      keycodes/W move-one-up!
+                      keycodes/A move-one-left!
+                      keycodes/S move-one-down!
+                      keycodes/D move-one-right!}))
 
 
 ;;; ======================= App container setup =======================
@@ -416,4 +417,5 @@
   (attach-event-handlers! state)
   (print "Refreshed!"))
 
-(fetch-random-enum! enum true)
+(defn init! [] (fetch-random-enum! enum true))
+(init!)
