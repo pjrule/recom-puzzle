@@ -49,6 +49,8 @@
   (partition 2 (list (- row 1) col (+ row 1) col row (- col 1) row (+ col 1))))
 
 (defn get-col [grid col] (vec (map #(get % col) grid)))
+(defn transpose [grid]
+  (vec (map #(vec (get-col grid %)) (range (count (get grid 0))))))
 (def do-map-indexed (comp doall map-indexed))
 (defn do-grid [cell-fn grid]
   (do-map-indexed
@@ -262,6 +264,32 @@
           ;; at next render)
           (gdom/setProperties grid #js {"class" "shake"}))))))
 
+(defn automerge! [state]
+  ;; If the two in-progress districts can be reconfigured to
+  ;; horizontal or vertical stripes in one move, reconfigure them.
+  (when (in-progress? state)
+    (let [{grid :grid in-progress :in-progress score :score} state
+          [a b]   (seq in-progress)
+          cells   (concat (dist-cells grid a) (dist-cells grid b))
+          min-row (apply min (map first cells))
+          max-row (apply max (map first cells))
+          min-col (apply min (map second cells))
+          max-col (apply max (map second cells))
+          union-width  (+ 1 (- max-col min-col))
+          union-height (+ 1 (- max-row min-row))]
+      (when (= union-height 2)  ; horizontal merge
+        (let [new-grid
+              (assoc grid min-row (vec (repeat union-width (min a b)))
+                          max-row (vec (repeat union-width (max a b))))]
+          (refresh! (assoc state :grid new-grid :score (inc score)))))
+      (when (= union-width 2)  ; vertical merge
+        (let [grid-t (transpose grid)
+              new-grid
+              (assoc grid-t min-col (vec (repeat union-height (min a b)))
+                            max-col (vec (repeat union-height (max a b))))
+              grid-tt (transpose new-grid)]
+          (refresh! (assoc state :grid grid-tt :score (inc score))))))))
+        
 
 ;;; ===================== History events (undo) =====================
 ;;; TODO: redo?
@@ -368,6 +396,7 @@
                       keycodes/ESC undo!  ; TODO: keep this?
                       keycodes/SPACE toggle-selected-cell!
                       keycodes/ZERO  toggle-selected-cell!
+                      keycodes/Q     automerge!
 
                       ;; district selection keybindings (up to 9x9)
                       ;; TODO: use modified hexadecimal for larger grids?
@@ -419,7 +448,6 @@
   (gevents/removeAll js/document) ; reset global event listeners
   (render-app! state)
   (attach-event-handlers! state)
-  (println "new state:" state)
   (print "Refreshed!"))
 
 (defn init! [] (fetch-random-enum! enum true))
