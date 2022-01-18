@@ -25,12 +25,12 @@
 (def grid-size 8)
 (def width grid-size)
 (def height grid-size)
-(def num-pages 1)  ; of random plans
+(def num-pages 100)  ; of random plans
 (def stripes (vec (map (fn [row] (vec (repeat width row)))
                        (range 1 (+ height 1)))))
-(def history (atom ()))
-(def enum (atom ()))
-(def start-time (atom (.now js/Date)))
+(defonce history (atom ()))
+(defonce enum (atom ()))
+(defonce start-time (atom (.now js/Date)))
 
 (declare refresh!)
 (defn in-progress? [state] (seq (get state :in-progress)))
@@ -190,20 +190,6 @@
 
 ;;; ================== Cell/district selection events =================
 ;;; For manipulating individual cells and districts.
-(defn on-dist-select! [state dist]
-  ;; Toggles district selection when no districts are in progress.
-  ;; No more than two districts can be selected at a time.
-  (let [selected (or (get state :selected) ())
-        in-selected? (some #{dist} selected)]
-    (when (not (in-progress? state))
-      (if in-selected?
-        (refresh! (assoc state :selected (filter #(not (= dist %)) selected)))
-        (if (< (count selected) 2) ; non-toggle case
-          (refresh! (update state :selected conj dist))
-          (refresh! (assoc  state :selected (list dist (first selected)))))))))
-
-(defn on-dist-digit-key! [digit] #(on-dist-select! % digit))
-
 (defn on-cell-select! [state row col]
   ;; Toggles a cell's district assignment when the cell
   ;; is in an in-progress district.
@@ -267,6 +253,28 @@
           ;; hack: ephemerally attach the `shake` class (removed
           ;; at next render)
           (gdom/setProperties grid #js {"class" "shake"}))))))
+
+(defn on-dist-select! [state dist]
+  ;; Toggles district selection when no districts are in progress.
+  ;; No more than two districts can be selected at a time.
+  (let [selected (or (get state :selected) ())
+        last-selected-time (get state :last-selected-time)
+        now (.now js/Date)
+        in-selected? (some #{dist} selected)]
+    (when (not (in-progress? state))
+      (if in-selected?
+        ;; We register clicks with a <500 ms interval as a merge event.
+        (if (< (- now last-selected-time) 500)
+          (merge-selected! (dissoc state :last-selected-time))
+          (refresh! (assoc state :selected (filter #(not (= dist %)) selected)
+                                 :last-selected-time now)))
+        (if (< (count selected) 2) ; non-toggle case
+          (refresh! (assoc (update state :selected conj dist)
+                           :last-selected-time now))
+          (refresh! (assoc state :selected (list dist (first selected))
+                                 :last-selected-time now)))))))
+
+(defn on-dist-digit-key! [digit] #(on-dist-select! % digit))
 
 (defn automerge! [state]
   ;; If the two in-progress districts can be reconfigured to
