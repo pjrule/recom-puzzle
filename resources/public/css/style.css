@@ -53,8 +53,16 @@ body {
     text-align: center;
 }
 
+#timer {
+    color: #333;
+    padding-left: 3px;
+    width: 4rem;
+}
+
 .app-header {
     display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 15px 2px;
 }
 
