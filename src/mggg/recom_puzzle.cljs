@@ -30,6 +30,7 @@
                        (range 1 (+ height 1)))))
 (def history (atom ()))
 (def enum (atom ()))
+(def start-time (atom (.now js/Date)))
 
 (declare refresh!)
 (defn in-progress? [state] (seq (get state :in-progress)))
@@ -158,6 +159,7 @@
       (when render?
         (let [grid (parse-next-plan! enum)]
           (reset! history (list grid))
+          (reset! start-time (.now js/Date))
           (refresh! {:grid grid :selected () :in-progress #{} :score 0}))))))
 
 
@@ -224,6 +226,7 @@
 (defn shuffle! []
   (let [grid (parse-next-plan! enum)]
     (reset! history (list grid))
+    (reset! start-time (.now js/Date))
     (refresh! {:grid grid :selected () :in-progress #{} :score 0})))
 
 (defn reset-selected! [state]
@@ -433,14 +436,26 @@
   (set! (.-innerHTML app-container) html-str))
 
 
+;;; ============================= Timer =============================
+(defn render-timer [start-time]
+  (let [delta (- (.now js/Date) @start-time)
+        seconds (quot delta 1000)
+        minutes (quot seconds 60)
+        seconds-mod (mod seconds 60)]
+    (gstr/format "%d:%02d" minutes seconds-mod)))
+
+(defn update-timer! [start-time]
+  (when-let [timer-el (gdom/getElement "timer")]
+    (set! (.-innerHTML timer-el) (render-timer start-time)))
+  (js/setTimeout (partial update-timer! start-time) 200))
+
 ;;; ======================== Global rendering ========================
 (defn render-app! [state]
   (set-app-html!
    (hiccups/html
     [:div {:class "app-main"}
      [:div {:class "app-header"}
-      [:select {:id "grid-size"}
-       [:option {:value "8x8"} "8x8"]]
+      [:span {:id "timer"} (render-timer start-time)]
       [:span {:class "score"} (get state :score)]
       [:button {:id "shuffle-button"} "🔀"]]
      (render-grid state)])))
@@ -451,5 +466,7 @@
   (attach-event-handlers! state)
   (print "Refreshed!"))
 
-(defn init! [] (fetch-random-enum! enum true))
+(defn init! []
+  (fetch-random-enum! enum true)
+  (update-timer! start-time))
 (init!)
