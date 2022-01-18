@@ -26,7 +26,6 @@ button.cursor {
     box-shadow: 0 0 10px #9ecaed;
 }
 
-
 body {
     background-color: #fff9f2;
     height: 100%;
@@ -106,7 +105,7 @@ body {
     background-color: #bebada;
 }
 .dist-9 {
-    background-color: #fb8072;
+    background-color: #ffed6f; /*#fb8072;*/
 }
 .dist-10 {
     background-color: #80b1d3;

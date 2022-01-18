@@ -22,14 +22,58 @@
 ;;; state history.
 ;;; TODO: add menu options, load initial plans from server.
 
-(def grid-size 8)
-(def width grid-size)
-(def height grid-size)
-(def num-pages 100)  ; of random plans
-(def stripes (vec (map (fn [row] (vec (repeat width row)))
-                       (range 1 (+ height 1)))))
+(def grids 
+  ;; A grid is parameterized by its width, height, and district count (`n`).
+  ;; 
+  ;; Starting plans are pregenerated with `enumpart`.
+  ;; For parameterizations with ≤100,000 possible plans, we store
+  ;; the whole enumeration in pages of varying size (always less
+  ;; than 10,000 lines). In all other cases, we store a uniform
+  ;; sample of 100,000 plans in 100 pages of 1,000 lines each.
+  ;; 
+  ;; TODO: autogenerate this? (up to special cases...)
+  ;; (Useful to be able to remove some for debugging, though.)
+  [;;{:width 4 :height 4 :n 4 :pages 1}
+   ;;{:width 4 :height 5 :n 4 :pages 1}
+   ;;{:width 4 :height 5 :n 5 :pages 1}
+   {:width 4 :height 6 :n 4 :pages 1}
+   {:width 4 :height 6 :n 6 :pages 1}
+   {:width 4 :height 7 :n 4 :pages 1}
+   {:width 4 :height 7 :n 7 :pages 1}
+   {:width 4 :height 8 :n 4 :pages 40}
+   {:width 4 :height 8 :n 8 :pages 41}
+   {:width 4 :height 9 :n 4 :pages 100}
+   {:width 4 :height 9 :n 9 :pages 100}
+
+   {:width 5 :height 5 :n 5 :pages 1}
+   {:width 5 :height 6 :n 5 :pages 34}
+   {:width 5 :height 6 :n 6 :pages 28}
+   {:width 5 :height 7 :n 5 :pages 100}
+   {:width 5 :height 7 :n 7 :pages 100}
+   {:width 5 :height 8 :n 5 :pages 100}
+   {:width 5 :height 8 :n 8 :pages 100}
+   {:width 5 :height 9 :n 5 :pages 100}
+   {:width 5 :height 9 :n 9 :pages 100}
+
+   {:width 6 :height 6 :n 6 :pages 100}
+   {:width 6 :height 7 :n 6 :pages 100}
+   {:width 6 :height 7 :n 7 :pages 100}
+   {:width 6 :height 8 :n 6 :pages 100}
+   {:width 6 :height 8 :n 8 :pages 100}
+   {:width 6 :height 9 :n 6 :pages 100}
+   {:width 6 :height 9 :n 9 :pages 100}
+
+   {:width 7 :height 7 :n 7 :pages 100}
+   {:width 7 :height 8 :n 7 :pages 100}
+   {:width 7 :height 8 :n 8 :pages 100}
+   {:width 7 :height 9 :n 7 :pages 100}
+   {:width 7 :height 9 :n 9 :pages 100}
+
+   {:width 8 :height 8 :n 8 :pages 100}])
+
 (defonce history (atom ()))
 (defonce enum (atom ()))
+(defonce params (atom ()))
 (defonce start-time (atom (.now js/Date)))
 
 (declare refresh!)
@@ -142,22 +186,27 @@
 
 
 ;;; ====================== Enumeration fetching ======================
-(defn parse-next-plan! [enum]
+(defn parse-next-plan! [params enum]
   ;; Fetches the next starting plan from the enumeration.
   (when-let [next-plan (first @enum)]
     (swap! enum pop)
-    (vec (map vec (partition width (map int next-plan))))))
+    (vec (map vec (partition (get @params :width) (map int next-plan))))))
 
-(defn fetch-random-enum! [enum render?]
+(defn fetch-random-enum! [params enum history start-time render?]
   ;; Populates the enumeration atom with a random subset of plans.
-  (go (let [page-idx   (gstr/format "%02d" (rand-int num-pages))
-            dims       (gstr/format "%dx%d" width height)
+  (go (let [random-params (rand-nth grids)
+            {width :width height :height n :n pages :pages} random-params
+            page-idx   (gstr/format "%02d" (rand-int pages))
+            dims       (gstr/format "%dx%d_%d" width height n)
             page-url   (gstr/format "enum/%s/%s_%s.dat" dims dims page-idx)
             page-data  (<! (http/get page-url))
             page-lines (into () (str/split (get page-data :body) #"\n"))]
-      (reset! enum page-lines)
+      (reset! enum   page-lines)
+      (reset! params random-params)
       (when render?
-        (let [grid (parse-next-plan! enum)]
+        (let [grid  (parse-next-plan! params enum)
+              title (gstr/format "ReCom (%dx%d → %d)" width height n)]
+          (set! (.-title js/document) title)
           (reset! history (list grid))
           (reset! start-time (.now js/Date))
           (refresh! {:grid grid :selected () :in-progress #{} :score 0}))))))
@@ -210,7 +259,7 @@
 ;;; ===================== Global selection events ====================
 ;;; For manipulating district pairs and multiple-district selections.
 (defn shuffle! []
-  (let [grid (parse-next-plan! enum)]
+  (let [grid (parse-next-plan! params enum)]
     (reset! history (list grid))
     (reset! start-time (.now js/Date))
     (refresh! {:grid grid :selected () :in-progress #{} :score 0})))
@@ -475,6 +524,6 @@
   (print "Refreshed!"))
 
 (defn init! []
-  (fetch-random-enum! enum true)
+  (fetch-random-enum! params enum history start-time true)
   (update-timer! start-time))
 (init!)
