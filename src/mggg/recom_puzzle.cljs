@@ -40,9 +40,9 @@
    ;;{:width 4 :height 6 :n 6 :pages 1}
    ;;{:width 4 :height 7 :n 4 :pages 1}
    ;;{:width 4 :height 7 :n 7 :pages 1}
-   ;;{:width 4 :height 8 :n 4 :pages 40}
+   {:width 4 :height 8 :n 4 :pages 40}
    {:width 4 :height 8 :n 8 :pages 41}
-   ;;{:width 4 :height 9 :n 4 :pages 100}
+   {:width 4 :height 9 :n 4 :pages 100}
    {:width 4 :height 9 :n 9 :pages 100}
 
    {:width 5 :height 5 :n 5 :pages 1}
@@ -69,7 +69,10 @@
    {:width 7 :height 9 :n 7 :pages 100}
    {:width 7 :height 9 :n 9 :pages 100}
 
-   {:width 8 :height 8 :n 8 :pages 100}])
+   {:width 8 :height 8 :n 8 :pages 100}
+   {:width 8 :height 9 :n 8 :pages 100}
+   {:width 8 :height 9 :n 9 :pages 100}])
+   
 
 (defonce history (atom ()))
 (defonce enum (atom ()))
