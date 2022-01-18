@@ -12,9 +12,9 @@ clj -A:fig:min
 if git checkout gh-pages; then 
     git checkout - resources/public
     cp target/public/cljs-out/dev-main.js main.js
-    replace="s/main.js/main.js?$(sha256sum main.js | cut -d ' ' -f 1)/g;"
-             #s/style.css/style.css?$(sha256sum css/style.css |  cut -d ' ' -f 1)/g"
-    sed $replace resources/public/index_deploy.html > index.html
+    replace_js="s/main.js/main.js?$(sha256sum main.js | cut -d ' ' -f 1)/g"
+    replace_css="s/style.css/style.css?$(sha256sum resources/public/css/style.css |  cut -d ' ' -f 1)/g"
+    sed -e $replace_js -e $replace_css resources/public/index_deploy.html > index.html
     git add main.js index.html
     git commit -m "Push to GitHub Pages"
     git push origin gh-pages
