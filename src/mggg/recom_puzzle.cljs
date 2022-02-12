@@ -33,13 +33,13 @@
   ;; 
   ;; TODO: autogenerate this? (up to special cases...)
   ;; (Useful to be able to remove some for debugging, though.)
-  [;;{:width 4 :height 4 :n 4 :pages 1}
-   ;;{:width 4 :height 5 :n 4 :pages 1}
-   ;;{:width 4 :height 5 :n 5 :pages 1}
-   ;;{:width 4 :height 6 :n 4 :pages 1}
-   ;;{:width 4 :height 6 :n 6 :pages 1}
-   ;;{:width 4 :height 7 :n 4 :pages 1}
-   ;;{:width 4 :height 7 :n 7 :pages 1}
+  [{:width 4 :height 4 :n 4 :pages 1}
+   {:width 4 :height 5 :n 4 :pages 1}
+   {:width 4 :height 5 :n 5 :pages 1}
+   {:width 4 :height 6 :n 4 :pages 1}
+   {:width 4 :height 6 :n 6 :pages 1}
+   {:width 4 :height 7 :n 4 :pages 1}
+   {:width 4 :height 7 :n 7 :pages 1}
    {:width 4 :height 8 :n 4 :pages 40}
    {:width 4 :height 8 :n 8 :pages 41}
    {:width 4 :height 9 :n 4 :pages 100}
@@ -72,14 +72,16 @@
    {:width 8 :height 8 :n 8 :pages 100}
    {:width 8 :height 9 :n 8 :pages 100}
    {:width 8 :height 9 :n 9 :pages 100}])
-   
+(def default-grid {:width 6 :height 6 :n 6 :pages 100})
+
 
 (defonce history (atom ()))
 (defonce enum (atom ()))
-(defonce params (atom ()))
+(defonce params (atom default-grid))
 (defonce start-time (atom (.now js/Date)))
 
 (declare refresh!)
+(declare init!)
 (defn in-progress? [state] (seq (get state :in-progress)))
 
 
@@ -196,16 +198,14 @@
     (vec (map vec (partition (get @params :width) (map int next-plan))))))
 
 (defn fetch-random-enum! [params enum history start-time render?]
-  ;; Populates the enumeration atom with a random subset of plans.
-  (go (let [random-params (rand-nth grids)
-            {width :width height :height n :n pages :pages} random-params
+  ;; Populates the enumeration atom with a random enumeration.
+  (go (let [{width :width height :height n :n pages :pages} @params
             page-idx   (gstr/format "%02d" (rand-int pages))
             dims       (gstr/format "%dx%d_%d" width height n)
             page-url   (gstr/format "enum/%s/%s_%s.dat" dims dims page-idx)
             page-data  (<! (http/get page-url))
             page-lines (into () (str/split (get page-data :body) #"\n"))]
       (reset! enum   page-lines)
-      (reset! params random-params)
       (when render?
         (let [grid  (parse-next-plan! params enum)
               title (gstr/format "ReCom (%dx%d → %d)" width height n)]
@@ -215,7 +215,7 @@
           (refresh! {:grid grid :selected () :in-progress #{} :score 0}))))))
 
 
-;;; ========================= Grid rendering =========================
+;;; ========================= UI rendering =========================
 (defn render-grid-row [state row-idx row-state]
   (let [{grid :grid selected :selected in-progress :in-progress
          selected-row :row selected-col :col} state]
@@ -239,11 +239,19 @@
          (render-grid-row state row-idx row-state)])
       (get state :grid))])
 
+(defn render-params [params]
+  [:select {:id "grid-size"}
+   (map-indexed
+    (fn [idx grid]
+      (let [{width :width height :height n :n} grid]
+        [:option {:value idx :selected (= grid @params)}
+         (gstr/format "%dx%d → %d" width height n)]))
+    grids)])
 
 ;;; ================== Cell/district selection events =================
 ;;; For manipulating individual cells and districts.
 (defn on-cell-select! [state row col]
-  ;; Toggles a cell's district assignment when the cell
+  ;; Toggles a celal's district assignment when the cell
   ;; is in an in-progress district.
   (when (in-progress? state)
     (let [{grid :grid in-progress :in-progress} state
@@ -451,9 +459,20 @@
   (when-let [shuffle-button (gdom/getElement "shuffle-button")]
     (gevents/listen shuffle-button "click" shuffle!)))
 
+
+(defn attach-grid-size-selector-event! [params]
+  (when-let [grid-size-selector (gdom/getElement "grid-size")]
+    (.addEventListener grid-size-selector "change"
+      (fn []
+        (let [new-params (get grids (. grid-size-selector -selectedIndex))]
+          (reset! params new-params)
+          (init!))))))
+
+
 (defn attach-event-handlers! [state]
   (attach-grid-events! state)
   (attach-shuffle-event! state)
+  (attach-grid-size-selector-event! params)
   (capture-key state {keycodes/R reset-selected!
                       keycodes/ENTER merge-selected!
                       keycodes/U undo!
@@ -479,7 +498,7 @@
                       keycodes/LEFT move-one-left!
                       keycodes/DOWN move-one-down!
                       keycodes/RIGHT move-one-right!
-                      
+
                       ;; jump navigation
                       keycodes/W move-one-up!
                       keycodes/A move-one-left!
@@ -518,7 +537,9 @@
       [:span {:id "timer"} (render-timer start-time)]
       [:span {:class "score"} (get state :score)]
       [:button {:id "shuffle-button"} "🔀"]]
-     (render-grid state)])))
+     (render-grid state)
+     [:div {:class "app-footer"}
+      (render-params params)]])))
 
 (defn refresh! [state]
   (gevents/removeAll js/document) ; reset global event listeners
