@@ -205,7 +205,7 @@
             page-url   (gstr/format "enum/%s/%s_%s.dat" dims dims page-idx)
             page-data  (<! (http/get page-url))
             page-lines (into () (str/split (get page-data :body) #"\n"))]
-      (reset! enum   page-lines)
+      (reset! enum (apply list (shuffle page-lines)))
       (when render?
         (let [grid  (parse-next-plan! params enum)
               title (gstr/format "ReCom (%dx%d → %d)" width height n)]
